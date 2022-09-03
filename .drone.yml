@@ -1,0 +1,72 @@
+kind: pipeline
+type: docker
+name: build
+
+trigger:
+  event:
+    - push
+    - tag
+    - pull_request
+steps:
+  - name: tidy
+    image: golang:1.19.0
+    commands:
+      - go mod tidy
+      - git diff --exit-code -- go.mod go.sum
+  - name: lint
+    image: golangci/golangci-lint:v1.46.2
+    commands:
+      - golangci-lint run -v -E gofmt
+  - name: vet
+    image: golang:1.19.0
+    commands:
+      - go vet -race ./...
+  - name: build
+    image: golang:1.19.0
+    commands:
+      - go build -race .
+  - name: gosec
+    image: securego/gosec:2.12.0
+    commands:
+      - gosec -tests ./...
+---
+kind: pipeline
+type: docker
+name: test
+
+trigger:
+  event:
+    - push
+    - tag
+
+depends_on:
+  - build
+
+steps:
+  - name: test-integration
+    image: golang:1.19.0
+    commands:
+      - go test -v ./...
+    environment:
+      discordapikey:
+        from_secret: discordapikey
+---
+kind: pipeline
+type: docker
+name: tagged version in libinfo
+
+trigger:
+  event:
+    - tag
+
+depends_on:
+  - build
+
+steps:
+  - name: check version
+    image: golang:1.19.0
+    commands:
+      - git pull origin --tags main
+      - echo Current latest tag is $(git tag --sort=committerdate | tail -1) HEAD is $(git tag --points-at HEAD)
+      - echo Current tag in libinfo/info.go is $(grep "BotLibraryVersion =" libinfo/info.go | awk '{print substr($3, 2, length($3)-2)}')
+      - test $(grep "BotLibraryVersion =" libinfo/info.go | awk '{print substr($3, 2, length($3)-2)}') = $(git tag --sort=committerdate | tail -1 | awk '{print substr($0,2, length($0))}')

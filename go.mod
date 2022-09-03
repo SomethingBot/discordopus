@@ -1,4 +1,4 @@
-module discordopus
+module github.com/SomethingBot/discordopus
 
 go 1.18
 

@@ -90,8 +90,8 @@ func LiveConvertAudioStreamToS16LE(audioStream io.Reader) (io.ReadCloser, error)
 }
 
 type PCMData struct {
-	err  error
-	data []byte
+	Error error
+	Data  []byte
 }
 
 // ConvertS16LEBytesToPCM read from reader, and output to channel; must read chan until emptied, and error check on last returned PCMData

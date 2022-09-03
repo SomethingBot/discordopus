@@ -66,6 +66,7 @@ const frameSize = 960
 const maxBytes = (frameSize * 2) * 2
 
 func LiveConvertAudioStreamToS16LE(audioStream io.Reader) (io.ReadCloser, error) {
+	/* #nosec G204 */
 	ffmpeg := exec.Command("ffmpeg", "-i", "pipe:", "-f", "s16le", "-ar", fmt.Sprint(frameRate), "-ac", fmt.Sprint(channels), "pipe:1")
 	ffmpeg.Stdin = audioStream
 	ffmpeg.Stderr = os.Stderr

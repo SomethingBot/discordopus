@@ -102,7 +102,7 @@ func ConvertS16LEBytesToPCM(reader io.Reader) chan PCMData {
 
 		enc, err := gopus.NewEncoder(frameRate, channels, gopus.Audio)
 		if err != nil {
-			pcmData <- PCMData{err: err}
+			pcmData <- PCMData{Error: err}
 			return
 		}
 
@@ -114,15 +114,15 @@ func ConvertS16LEBytesToPCM(reader io.Reader) chan PCMData {
 				return
 			}
 			if err != nil {
-				pcmData <- PCMData{err: err}
+				pcmData <- PCMData{Error: err}
 				return
 			}
 			opusData, err = enc.Encode(buf, frameSize, maxBytes)
 			if err != nil {
-				pcmData <- PCMData{err: err}
+				pcmData <- PCMData{Error: err}
 				return
 			}
-			pcmData <- PCMData{data: opusData}
+			pcmData <- PCMData{Data: opusData}
 		}
 	}(pcmData)
 	return pcmData

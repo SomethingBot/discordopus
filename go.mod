@@ -3,8 +3,8 @@ module github.com/SomethingBot/discordopus
 go 1.18
 
 require (
-	github.com/SomethingBot/multierror v0.0.2
 	github.com/kkdai/youtube/v2 v2.7.16
+	github.com/simplylib/multierror v0.0.1
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 

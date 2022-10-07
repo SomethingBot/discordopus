@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/SomethingBot/multierror"
 	"github.com/kkdai/youtube/v2"
+	"github.com/simplylib/multierror"
 	"layeh.com/gopus"
 )
 

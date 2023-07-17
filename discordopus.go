@@ -10,7 +10,6 @@ import (
 	"os/exec"
 
 	"github.com/kkdai/youtube/v2"
-	"github.com/simplylib/multierror"
 	"layeh.com/gopus"
 )
 
@@ -31,9 +30,7 @@ func GetAudioStream(url string) (io.ReadCloser, error) {
 		return nil, ErrNoAudioStream
 	}
 
-	var readCloser io.ReadCloser
-
-	readCloser, _, err = client.GetStream(video, &formatList[0])
+	readCloser, _, err := client.GetStream(video, &formatList[0])
 	if err != nil {
 		return nil, fmt.Errorf("could not get audio stream (%w)", err)
 	}
@@ -49,7 +46,7 @@ func (mc *MultiCloser) Close() error {
 	for _, c := range []io.Closer(*mc) {
 		err2 := c.Close()
 		if err2 != nil {
-			err = multierror.Append(err, err2)
+			err = errors.Join(err, fmt.Errorf("could not close reader (%w)", err2))
 		}
 	}
 	return err

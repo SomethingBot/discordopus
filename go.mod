@@ -3,7 +3,7 @@ module github.com/SomethingBot/discordopus
 go 1.20
 
 require (
-	github.com/kkdai/youtube/v2 v2.8.3
+	github.com/kkdai/youtube/v2 v2.8.4
 	layeh.com/gopus v0.0.0-20210501142526-1ee02d434e32
 )
 

@@ -5,18 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"unsafe"
 
+	"github.com/ebitengine/purego"
 	"github.com/kkdai/youtube/v2"
-	"layeh.com/gopus"
 )
 
 var ErrNoAudioStream = errors.New("no audio streams found")
 
 func GetAudioStream(url string) (io.ReadCloser, error) {
-	client := youtube.Client{Debug: false, HTTPClient: http.DefaultClient}
+	client := youtube.Client{HTTPClient: http.DefaultClient}
 
 	video, err := client.GetVideo(url)
 	if err != nil {
@@ -98,45 +100,73 @@ func LiveConvertAudioStreamToS16LE(audioStream io.Reader) (io.ReadCloser, error)
 	}, nil
 }
 
-type PCMData struct {
+type OpusData struct {
 	Error error
 	Data  []byte
 }
 
-// ConvertS16LEBytesToPCM read from reader, and output to channel; must read chan until emptied, and error check on last returned PCMData
-func ConvertS16LEBytesToPCM(reader io.Reader) chan PCMData {
-	pcmData := make(chan PCMData, 1)
-	go func() {
-		defer close(pcmData)
+func ConvertS16LEBytesToOpusBytes(reader io.Reader) chan OpusData {
+	opusData := make(chan OpusData, 1)
 
-		enc, err := gopus.NewEncoder(frameRate, channels, gopus.Audio)
-		if err != nil {
-			pcmData <- PCMData{Error: fmt.Errorf("coud not get new gopus encoder (%w)", err)}
-			return
-		}
+	libopus, err := purego.Dlopen("libopus.so.0", purego.RTLD_NOW|purego.RTLD_GLOBAL)
+	if err != nil {
+		opusData <- OpusData{Error: fmt.Errorf("could not open libopusenc.so.0 error (%w)", err)}
+		return opusData
+	}
+
+	var opusEncGetSize func(channels int) int
+	purego.RegisterLibFunc(&opusEncGetSize, libopus, "opus_encoder_get_size")
+
+	data := make([]byte, opusEncGetSize(channels)) // Note get size can return 0
+	enc := unsafe.Pointer(&data[0])
+
+	var opusEncInit func(encoder unsafe.Pointer, sampleRate int32, channels int, application int) int
+	purego.RegisterLibFunc(&opusEncInit, libopus, "opus_encoder_init")
+
+	const opus_application_audio = 2049 // TODO: should this be the VoIP constant?
+	encErr := opusEncInit(enc, frameRate, channels, opus_application_audio)
+	if encErr != 0 { // TODO: handle errors better
+		opusData <- OpusData{Error: fmt.Errorf("could not inital libopus encoder (%v)", encErr)}
+		return opusData
+	}
+
+	var opusEncode func(encoder unsafe.Pointer, pcm unsafe.Pointer, frameSize int, data unsafe.Pointer, maxBytes int32) int32
+	purego.RegisterLibFunc(&opusEncode, libopus, "opus_encode")
+
+	go func() {
+		defer close(opusData)
 
 		buf := make([]int16, frameSize*channels)
 
-		var opusData []byte
 		for {
-			err = binary.Read(reader, binary.LittleEndian, &buf)
+			log.Println("called")
+			err := binary.Read(reader, binary.LittleEndian, &buf)
 			switch {
 			case errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF):
+				log.Println("io.EOF")
+				log.Println(err)
 				return
 			case err != nil:
-				pcmData <- PCMData{Error: fmt.Errorf("could not binary read from input reader while converting to PCM (%w)", err)}
+				opusData <- OpusData{Error: fmt.Errorf("could not binary read from input reader while encoding opus (%w)", err)}
 				return
 			}
 
-			opusData, err = enc.Encode(buf, frameSize, maxBytes)
-			if err != nil {
-				pcmData <- PCMData{Error: fmt.Errorf("could not encode opus data (%w)", err)}
+			pcmPtr := unsafe.Pointer(&buf[0])
+			encData := make([]byte, maxBytes)
+			encDataPtr := unsafe.Pointer(&encData[0])
+
+			encodeN := opusEncode(enc, pcmPtr, frameSize, encDataPtr, int32(len(encData)))
+			encode := int(encodeN)
+			log.Printf("encode: (%v) (%v)", encode, encodeN)
+
+			if encode < 0 {
+				opusData <- OpusData{Error: fmt.Errorf("could not encode to opus error (%v)", encode)}
 				return
 			}
 
-			pcmData <- PCMData{Data: opusData}
+			opusData <- OpusData{Data: encData[0:encode]}
 		}
 	}()
 
-	return pcmData
+	return opusData
 }

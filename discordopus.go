@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -139,12 +138,9 @@ func ConvertS16LEBytesToOpusBytes(reader io.Reader) chan OpusData {
 		buf := make([]int16, frameSize*channels)
 
 		for {
-			log.Println("called")
 			err := binary.Read(reader, binary.LittleEndian, &buf)
 			switch {
 			case errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF):
-				log.Println("io.EOF")
-				log.Println(err)
 				return
 			case err != nil:
 				opusData <- OpusData{Error: fmt.Errorf("could not binary read from input reader while encoding opus (%w)", err)}
@@ -157,7 +153,6 @@ func ConvertS16LEBytesToOpusBytes(reader io.Reader) chan OpusData {
 
 			encodeN := opusEncode(enc, pcmPtr, frameSize, encDataPtr, int32(len(encData)))
 			encode := int(encodeN)
-			log.Printf("encode: (%v) (%v)", encode, encodeN)
 
 			if encode < 0 {
 				opusData <- OpusData{Error: fmt.Errorf("could not encode to opus error (%v)", encode)}
